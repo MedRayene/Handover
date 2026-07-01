@@ -4,6 +4,8 @@ A minimal, standard **5G roaming testbed**. A subscriber from a Home network (HP
 attaches through a Visited network (VPLMN), and the two cores exchange signalling over
 the **SEPP** roaming interface — exactly like real inter-operator roaming.
 
+**Repository:** [tahangz/testbed-Roaming-Open5gs](https://github.com/tahangz/testbed-Roaming-Open5gs)
+
 ```text
  OAI UE  ──►  OAI gNB  ──►  VPLMN core  ──(SEPP)──►  HPLMN core
 (IMSI 999/70)  (PLMN 001/01)   AMF/SMF/SEPP          UDM/UDR/AUSF/SEPP
@@ -63,15 +65,19 @@ docker compose version
 
 ## 2. Get the lab
 
-Copy this folder into your WSL home directory (recommended — much faster than `/mnt/c`):
+Clone the repository into your WSL home directory (recommended — much faster than `/mnt/c`):
 
 ```bash
-cp -r "/mnt/c/Users/<you>/…/roaming-2core-lab" ~/roaming-2core-lab
-cd ~/roaming-2core-lab
+sudo apt-get update && sudo apt-get install -y git   # if git isn't installed yet
+cd ~
+git clone https://github.com/tahangz/testbed-Roaming-Open5gs.git roaming-2core-lab
+cd roaming-2core-lab
 chmod +x scripts/*.sh
 ```
 
-*(If you cloned it directly inside WSL with git, just `cd` into it and run the `chmod` line.)*
+> This is a **private** repo — when prompted, sign in with your GitHub account (or a
+> Personal Access Token as the password). If you already have a local copy, just
+> `cd` into it and run the `chmod` line.
 
 ---
 
