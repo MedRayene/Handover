@@ -1,0 +1,52 @@
+services:
+  hplmn-core:
+    build:
+      context: ./docker/open5gs-core
+    image: open5gs-roaming-core:local
+    container_name: hplmn-core
+    hostname: hplmn-core
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    networks:
+      roaming-net:
+        ipv4_address: ${HPLMN_IP}
+    volumes:
+      - ./configs/hplmn:/lab/configs:rw
+      - ./logs:/logs:rw
+    environment:
+      - PLMN_ROLE=hplmn
+      - CORE_CONFIG=/lab/configs/5gc-hplmn.yaml
+      - LOG_FILE=/logs/hplmn.log
+    command: ["/lab/configs/start-core.sh"]
+
+  vplmn-core:
+    build:
+      context: ./docker/open5gs-core
+    image: open5gs-roaming-core:local
+    container_name: vplmn-core
+    hostname: vplmn-core
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    networks:
+      roaming-net:
+        ipv4_address: ${VPLMN_IP}
+    volumes:
+      - ./configs/vplmn:/lab/configs:rw
+      - ./logs:/logs:rw
+    environment:
+      - PLMN_ROLE=vplmn
+      - CORE_CONFIG=/lab/configs/5gc-vplmn.yaml
+      - LOG_FILE=/logs/vplmn.log
+    command: ["/lab/configs/start-core.sh"]
+
+networks:
+  roaming-net:
+    name: ${NET_NAME}
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SUBNET}

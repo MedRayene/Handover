@@ -1,0 +1,8 @@
+# Keep LF endings so shell scripts and configs run correctly in Linux/WSL
+* text=auto eol=lf
+*.sh text eol=lf
+*.conf text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Dockerfile text eol=lf
+hosts.add text eol=lf

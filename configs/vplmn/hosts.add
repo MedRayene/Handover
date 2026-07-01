@@ -1,0 +1,10 @@
+# VPLMN local NFs inside vplmn-core
+127.0.2.10 nrf.5gc.mnc001.mcc001.3gppnetwork.org
+127.0.2.11 ausf.5gc.mnc001.mcc001.3gppnetwork.org
+127.0.2.12 udm.5gc.mnc001.mcc001.3gppnetwork.org
+127.0.2.14 nssf.5gc.mnc001.mcc001.3gppnetwork.org
+127.0.2.4 smf.5gc.mnc001.mcc001.3gppnetwork.org
+127.0.2.250 sepp2.localdomain
+
+# Remote HPLMN container
+172.18.0.10 sepp1.localdomain hplmn-core
