@@ -1,0 +1,78 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+
+  ###################################################
+  # Prometheus
+  ###################################################
+  - job_name: "prometheus"
+
+    static_configs:
+      - targets:
+          - localhost:9095
+
+        labels:
+          app: prometheus
+          plmn: VPLMN
+
+  ###################################################
+  # AMF
+  ###################################################
+  - job_name: "amf"
+
+    static_configs:
+      - targets:
+          - 127.0.2.5:9090
+
+        labels:
+          nf: AMF
+          plmn: VPLMN
+
+  ###################################################
+  # SMF
+  ###################################################
+  - job_name: "smf"
+
+    static_configs:
+      - targets:
+          - 127.0.2.4:9090
+
+        labels:
+          nf: SMF
+          plmn: VPLMN
+
+  ###################################################
+  # UPF
+  ###################################################
+  - job_name: "upf"
+
+    static_configs:
+      - targets:
+          - 127.0.2.7:9090
+
+        labels:
+          nf: UPF
+          plmn: VPLMN
+
+
+
+  ###################################################
+  # PCF
+  ###################################################
+  - job_name: "pcf"
+
+    static_configs:
+      - targets:
+          - 127.0.2.13:9090
+
+        labels:
+          nf: PCF
+          plmn: VPLMN
+
+
+  - job_name: 'mobility-sim'
+    static_configs:
+      - targets: ['host.docker.internal:9093']
+

@@ -38,4 +38,10 @@ pkill -9 open5gs || true
 rm -f "${LOG_FILE:-/logs/hplmn.log}"
 ./build/tests/app/5gc -c "${CORE_CONFIG:-/lab/configs/5gc-hplmn.yaml}" > "${LOG_FILE:-/logs/hplmn.log}" 2>&1 &
 
+cd /opt/prometheus/prometheus-3.5.0.linux-amd64
+
+./prometheus \
+  --config.file=/lab/configs/prometheus.yml \
+  --web.listen-address=0.0.0.0:9095 &
+
 tail -f "${LOG_FILE:-/logs/hplmn.log}"

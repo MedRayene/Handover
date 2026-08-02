@@ -24,6 +24,19 @@ RUN git clone https://github.com/open5gs/open5gs.git /open5gs && \
     meson build --prefix=/usr && \
     ninja -C build
 
+# --------------------------------------------------
+# Install Prometheus
+# --------------------------------------------------
+
+WORKDIR /opt
+
+RUN mkdir -p /opt/prometheus && \
+    curl -L https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz \
+    -o /tmp/prometheus.tar.gz && \
+    tar -xzf /tmp/prometheus.tar.gz -C /opt/prometheus && \
+    rm /tmp/prometheus.tar.gz
+
+
 RUN mkdir -p /data/db /logs /lab/configs
 
 CMD ["bash", "-lc", "mongod --bind_ip 127.0.0.1 --dbpath /data/db --fork --logpath /logs/mongodb.log && sleep infinity"]

@@ -1,8 +1,8 @@
-# Runtime logs (mounted from containers)
-logs/*
-!logs/.gitkeep
-
-# OS / editor noise
-.DS_Store
-Thumbs.db
-*.swp
+backups/
+*.log
+*.dump
+node_modules/
+__pycache__/
+logs/
+docker/oai-custom/
+!docker/oai-custom/Dockerfile

@@ -43,6 +43,22 @@ services:
       - LOG_FILE=/logs/vplmn.log
     command: ["/lab/configs/start-core.sh"]
 
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    hostname: grafana
+
+    ports:
+      - "3000:3000"
+
+    networks:
+      - roaming-net
+
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+    restart: unless-stopped
+
 networks:
   roaming-net:
     name: ${NET_NAME}
@@ -50,3 +66,5 @@ networks:
     ipam:
       config:
         - subnet: ${SUBNET}
+volumes:
+  grafana-storage:
