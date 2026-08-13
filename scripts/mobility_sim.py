@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Simulateur de mobilite UE entre DU0 (gNB1) et DU1 (gNB2), avec handover F1
-declenche et confirme automatiquement au croisement des courbes de path loss.
+declenche/confirme automatiquement, et RSRP reel extrait des logs PHY (decorrele
+de la valeur de path loss pilotee par telnet).
 """
 
 import telnetlib
@@ -9,6 +10,7 @@ import time
 import threading
 import subprocess
 import datetime
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 DU0_HOST, DU0_PORT = "localhost", 9091
@@ -24,6 +26,7 @@ STEP_INTERVAL_S = 3
 
 METRICS_PORT = 9093
 PROMPT = b"softmodem_gnb>"
+RSRP_PATTERN = re.compile(r"average RSRP (-?\d+)")
 
 state_lock = threading.Lock()
 state = {"ploss_du0": PLOSS_MIN, "ploss_du1": PLOSS_MAX, "direction": "du0_to_du1"}
@@ -36,6 +39,9 @@ handover_state = {
     "failed_total": 0,
     "last_status": "idle",
 }
+
+real_rsrp_lock = threading.Lock()
+real_rsrp_state = {"du0": None, "du1": None}
 
 
 def connect(host, port):
@@ -62,8 +68,25 @@ def docker_logs_since(container, since_iso):
         return ""
 
 
+def tail_real_rsrp(container, key):
+    """Suit en continu les logs du DU et extrait le vrai RSRP mesure par la couche PHY."""
+    while True:
+        try:
+            proc = subprocess.Popen(
+                ["docker", "logs", "-f", "--tail", "0", container],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+            )
+            for line in proc.stdout:
+                match = RSRP_PATTERN.search(line)
+                if match:
+                    with real_rsrp_lock:
+                        real_rsrp_state[key] = int(match.group(1))
+        except Exception as e:
+            print(f"[WARN] tail_real_rsrp({container}) erreur: {e}, retry dans 5s", flush=True)
+            time.sleep(5)
+
+
 def try_start_handover():
-    """Verifie la condition et reserve atomiquement le HO (evite le double trigger)."""
     with handover_lock:
         source = handover_state["served_by"]
         target = "du1" if source == "du0" else "du0"
@@ -175,8 +198,12 @@ class MetricsHandler(BaseHTTPRequestHandler):
             failed = handover_state["failed_total"]
             status_map = {"idle": 0, "pending": 1, "success": 2, "failed": 3}
             status_code = status_map[handover_state["last_status"]]
+        with real_rsrp_lock:
+            r0 = real_rsrp_state["du0"]
+            r1 = real_rsrp_state["du1"]
+
         body = (
-            "# HELP mobility_sim_pathloss_db Path loss RF simule (dB)\n"
+            "# HELP mobility_sim_pathloss_db Path loss RF pilote via telnet (dB)\n"
             "# TYPE mobility_sim_pathloss_db gauge\n"
             f'mobility_sim_pathloss_db{{cell="du0_gnb1"}} {d0}\n'
             f'mobility_sim_pathloss_db{{cell="du1_gnb2"}} {d1}\n'
@@ -198,7 +225,14 @@ class MetricsHandler(BaseHTTPRequestHandler):
             "# HELP handover_last_status Dernier statut (0=idle,1=pending,2=success,3=failed)\n"
             "# TYPE handover_last_status gauge\n"
             f'handover_last_status {status_code}\n'
+            "# HELP real_rsrp_dbm RSRP reel mesure par la couche PHY OAI (extrait des logs DU), independant du path loss telnet\n"
+            "# TYPE real_rsrp_dbm gauge\n"
         )
+        if r0 is not None:
+            body += f'real_rsrp_dbm{{cell="du0_gnb1"}} {r0}\n'
+        if r1 is not None:
+            body += f'real_rsrp_dbm{{cell="du1_gnb2"}} {r1}\n'
+
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; version=0.0.4")
         self.end_headers()
@@ -210,6 +244,8 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=mobility_loop, daemon=True).start()
+    threading.Thread(target=tail_real_rsrp, args=("du0", "du0"), daemon=True).start()
+    threading.Thread(target=tail_real_rsrp, args=("du1", "du1"), daemon=True).start()
     server = HTTPServer(("0.0.0.0", METRICS_PORT), MetricsHandler)
     print(f"Exporteur Prometheus demarre sur :{METRICS_PORT}/metrics", flush=True)
     server.serve_forever()
