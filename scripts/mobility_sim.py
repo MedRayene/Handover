@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
 """
 Simulateur de mobilite UE entre DU0 (gNB1) et DU1 (gNB2), avec handover F1
-declenche/confirme automatiquement, et RSRP reel extrait des logs PHY (decorrele
-de la valeur de path loss pilotee par telnet).
+declenche/confirme automatiquement, et SNR reel extrait des logs PHY.
+
+Le SNR remplace le RSRP car ce dernier s'est revele insensible au path loss
+dans la plage utile (0-45 dB), a cause du gain de reception automatique
+(max_rxgain) qui compense l'attenuation avant que la mesure ne soit calculee.
+Le SNR, lui, reflete la degradation reelle car le gain amplifie signal et
+bruit dans les memes proportions.
+
+Chaque mesure SNR est horodatee et expire apres STALE_THRESHOLD_S secondes
+sans nouvelle ligne de log : le DU non-servant (qui n'a plus d'UE actif,
+donc plus de trafic uplink a mesurer) n'expose alors plus aucune valeur,
+au lieu de rester fige sur sa derniere mesure (ce qui produisait un faux
+plateau plat, non representatif d'un vrai signal stable).
 """
 
 import telnetlib
@@ -26,7 +37,11 @@ STEP_INTERVAL_S = 3
 
 METRICS_PORT = 9093
 PROMPT = b"softmodem_gnb>"
-RSRP_PATTERN = re.compile(r"average RSRP (-?\d+)")
+STALE_THRESHOLD_S = 5
+
+# Ligne exemple : "UE a16e: ulsch_rounds 9411/0/0/0, ulsch_errors 0, ulsch_DTX 0,
+#                  BLER 0.00000 MCS (0) 0 (Qm 2 deltaMCS 0 dB) NPRB 5 SNR 22.2 (+2.2) dB CCE fail 0"
+SNR_UL_PATTERN = re.compile(r"ulsch_rounds.*?SNR\s+(-?\d+\.?\d*)")
 
 state_lock = threading.Lock()
 state = {"ploss_du0": PLOSS_MIN, "ploss_du1": PLOSS_MAX, "direction": "du0_to_du1"}
@@ -40,8 +55,9 @@ handover_state = {
     "last_status": "idle",
 }
 
-real_rsrp_lock = threading.Lock()
-real_rsrp_state = {"du0": None, "du1": None}
+real_snr_lock = threading.Lock()
+real_snr_state = {"du0": None, "du1": None}
+real_snr_timestamp = {"du0": 0.0, "du1": 0.0}
 
 
 def connect(host, port):
@@ -68,8 +84,8 @@ def docker_logs_since(container, since_iso):
         return ""
 
 
-def tail_real_rsrp(container, key):
-    """Suit en continu les logs du DU et extrait le vrai RSRP mesure par la couche PHY."""
+def tail_real_snr(container, key):
+    """Suit en continu les logs du DU et extrait le SNR uplink reel mesure par la couche PHY."""
     while True:
         try:
             proc = subprocess.Popen(
@@ -77,12 +93,13 @@ def tail_real_rsrp(container, key):
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
             )
             for line in proc.stdout:
-                match = RSRP_PATTERN.search(line)
+                match = SNR_UL_PATTERN.search(line)
                 if match:
-                    with real_rsrp_lock:
-                        real_rsrp_state[key] = int(match.group(1))
+                    with real_snr_lock:
+                        real_snr_state[key] = float(match.group(1))
+                        real_snr_timestamp[key] = time.time()
         except Exception as e:
-            print(f"[WARN] tail_real_rsrp({container}) erreur: {e}, retry dans 5s", flush=True)
+            print(f"[WARN] tail_real_snr({container}) erreur: {e}, retry dans 5s", flush=True)
             time.sleep(5)
 
 
@@ -198,9 +215,11 @@ class MetricsHandler(BaseHTTPRequestHandler):
             failed = handover_state["failed_total"]
             status_map = {"idle": 0, "pending": 1, "success": 2, "failed": 3}
             status_code = status_map[handover_state["last_status"]]
-        with real_rsrp_lock:
-            r0 = real_rsrp_state["du0"]
-            r1 = real_rsrp_state["du1"]
+
+        now = time.time()
+        with real_snr_lock:
+            s0 = real_snr_state["du0"] if (now - real_snr_timestamp["du0"]) < STALE_THRESHOLD_S else None
+            s1 = real_snr_state["du1"] if (now - real_snr_timestamp["du1"]) < STALE_THRESHOLD_S else None
 
         body = (
             "# HELP mobility_sim_pathloss_db Path loss RF pilote via telnet (dB)\n"
@@ -225,13 +244,15 @@ class MetricsHandler(BaseHTTPRequestHandler):
             "# HELP handover_last_status Dernier statut (0=idle,1=pending,2=success,3=failed)\n"
             "# TYPE handover_last_status gauge\n"
             f'handover_last_status {status_code}\n'
-            "# HELP real_rsrp_dbm RSRP reel mesure par la couche PHY OAI (extrait des logs DU), independant du path loss telnet\n"
-            "# TYPE real_rsrp_dbm gauge\n"
+            "# HELP real_snr_db SNR uplink reel mesure par la couche PHY OAI (extrait des logs DU),\n"
+            "#      expose uniquement si une mesure fraiche existe (moins de 5s), independant du\n"
+            "#      path loss telnet\n"
+            "# TYPE real_snr_db gauge\n"
         )
-        if r0 is not None:
-            body += f'real_rsrp_dbm{{cell="du0_gnb1"}} {r0}\n'
-        if r1 is not None:
-            body += f'real_rsrp_dbm{{cell="du1_gnb2"}} {r1}\n'
+        if s0 is not None:
+            body += f'real_snr_db{{cell="du0_gnb1"}} {s0}\n'
+        if s1 is not None:
+            body += f'real_snr_db{{cell="du1_gnb2"}} {s1}\n'
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; version=0.0.4")
@@ -244,8 +265,8 @@ class MetricsHandler(BaseHTTPRequestHandler):
 
 def main():
     threading.Thread(target=mobility_loop, daemon=True).start()
-    threading.Thread(target=tail_real_rsrp, args=("du0", "du0"), daemon=True).start()
-    threading.Thread(target=tail_real_rsrp, args=("du1", "du1"), daemon=True).start()
+    threading.Thread(target=tail_real_snr, args=("du0", "du0"), daemon=True).start()
+    threading.Thread(target=tail_real_snr, args=("du1", "du1"), daemon=True).start()
     server = HTTPServer(("0.0.0.0", METRICS_PORT), MetricsHandler)
     print(f"Exporteur Prometheus demarre sur :{METRICS_PORT}/metrics", flush=True)
     server.serve_forever()

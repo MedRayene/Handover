@@ -4,5 +4,4 @@ backups/
 node_modules/
 __pycache__/
 logs/
-docker/oai-custom/
-!docker/oai-custom/Dockerfile
+
