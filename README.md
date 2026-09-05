@@ -8,7 +8,7 @@ embedded telnet interface, and a real handover is triggered and confirmed (via
 log-based proof) as the UE moves from one cell to the other. Everything is exported to
 Prometheus and visualized in a dedicated Grafana dashboard.
 
-**Repository:** [tahangz/testbed-Roaming-Open5gs](https://github.com/tahangz/testbed-Roaming-Open5gs)
+**Repository:** [MedRayene/Handover](https://github.com/MedRayene/Handover)
 
 ```text
 [NWDAF-ready core]
@@ -85,7 +85,7 @@ Clone the repository into your WSL home directory (recommended — much faster t
 ```bash
 sudo apt-get update && sudo apt-get install -y git   # if git isn't installed yet
 cd ~
-git clone https://github.com/tahangz/testbed-Roaming-Open5gs.git roaming-2core-lab
+git clone https://github.com/MedRayene/Handover.git roaming-2core-lab
 cd roaming-2core-lab
 chmod +x scripts/*.sh
 ```
@@ -180,6 +180,18 @@ Check it's exporting metrics:
 
 ```bash
 curl -s localhost:9093/metrics | head -20
+```
+
+### Step 6b — Start Grafana (first time only)
+
+```bash
+docker volume create grafana-storage
+docker run -d --name grafana \
+  --network open5gs-roaming-net \
+  -p 3000:3000 \
+  -v grafana-storage:/var/lib/grafana \
+  --restart unless-stopped \
+  grafana/grafana-oss:latest
 ```
 
 ### Step 7 — Import the Grafana dashboard
