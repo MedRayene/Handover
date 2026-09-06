@@ -1,26 +1,4 @@
 services:
-  hplmn-core:
-    build:
-      context: ./docker/open5gs-core
-    image: open5gs-roaming-core:local
-    container_name: hplmn-core
-    hostname: hplmn-core
-    privileged: true
-    cap_add:
-      - NET_ADMIN
-      - SYS_ADMIN
-    networks:
-      roaming-net:
-        ipv4_address: ${HPLMN_IP}
-    volumes:
-      - ./configs/hplmn:/lab/configs:rw
-      - ./logs:/logs:rw
-    environment:
-      - PLMN_ROLE=hplmn
-      - CORE_CONFIG=/lab/configs/5gc-hplmn.yaml
-      - LOG_FILE=/logs/hplmn.log
-    command: ["/lab/configs/start-core.sh"]
-
   vplmn-core:
     build:
       context: ./docker/open5gs-core
@@ -42,23 +20,17 @@ services:
       - CORE_CONFIG=/lab/configs/5gc-vplmn.yaml
       - LOG_FILE=/logs/vplmn.log
     command: ["/lab/configs/start-core.sh"]
-
   grafana:
     image: grafana/grafana-oss:latest
     container_name: grafana
     hostname: grafana
-
     ports:
       - "3000:3000"
-
     networks:
       - roaming-net
-
     volumes:
       - grafana-storage:/var/lib/grafana
-
     restart: unless-stopped
-
 networks:
   roaming-net:
     name: ${NET_NAME}
